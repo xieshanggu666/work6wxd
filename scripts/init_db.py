@@ -225,15 +225,21 @@ def main():
 
     # 4. 考试
     print("创建考试并组卷...")
+    from datetime import datetime, timedelta
+    from app.schemas.booking import SlotCreate
+    from app.services import booking_service
+
     exam = exam_service.create_exam(db, ExamCreate(
         title="Python 基础水平测试",
-        description="考察 Python 基础语法、数据结构与函数",
+        description="考察 Python 基础语法、数据结构与函数（需预约，允许 1 次补考）",
         subject_id=py.id,
         exam_type="formal",
         duration_minutes=60,
         total_score=100,
         pass_score=60,
         anti_cheat_enabled=1,
+        require_booking=1,
+        max_attempts=2,
     ), teacher.id)
     # 选取 10 题，每题 10 分
     for idx, q in enumerate(saved[:10]):
@@ -243,10 +249,33 @@ def main():
     db.refresh(exam)
     print(f"  考试 #{exam.id} 已发布，包含 {len(exam.questions)} 题")
 
+    # 5. 预约时段与示例预约
+    print("配置考试时段并生成示例预约...")
+    now = datetime.now()
+    slot1 = booking_service.create_slot(db, exam.id, SlotCreate(
+        name="第一批次（本周）",
+        start_time=now - timedelta(days=1),
+        end_time=now + timedelta(days=6),
+        capacity=30,
+    ))
+    slot2 = booking_service.create_slot(db, exam.id, SlotCreate(
+        name="第二批次（下周）",
+        start_time=now + timedelta(days=7),
+        end_time=now + timedelta(days=14),
+        capacity=20,
+    ))
+    # student1 首考预约已审核通过（可直接开考）
+    b1 = booking_service.apply_booking(db, exam.id, slot1.id, s1.id, reason="正常参加首考")
+    booking_service.review_booking(db, b1, teacher.id, True, "同意")
+    # student2 提交了首考预约，等待教师审核
+    booking_service.apply_booking(db, exam.id, slot2.id, s2.id, reason="申请第二批次首考")
+    print(f"  已创建 2 个时段（名额 {slot1.capacity}/{slot2.capacity}）与 2 条示例预约")
+
     print("\n✅ 初始化完成！")
     print("   管理员: admin / 123456")
     print("   教师:   teacher / 123456")
-    print("   学生:   student1 / 123456, student2 / 123456")
+    print("   学生:   student1 / 123456（预约已通过，可直接开考）")
+    print("           student2 / 123456（补考申请待审核）")
     print("   启动: uvicorn app.main:app --reload")
 
 

@@ -12,6 +12,10 @@ class ExamAttempt(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     exam_id: Mapped[int] = mapped_column(Integer, ForeignKey("exams.id"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    booking_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("exam_bookings.id"), nullable=True, index=True
+    )
+    attempt_no: Mapped[int] = mapped_column(Integer, default=1)  # 第几次考试（补考次数递增）
     start_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     submit_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     score: Mapped[float] = mapped_column(default=0.0)
@@ -25,6 +29,7 @@ class ExamAttempt(Base):
 
     exam: Mapped["Exam"] = relationship("Exam", back_populates="attempts")
     user: Mapped["User"] = relationship("User", back_populates="attempts")
+    booking = relationship("ExamBooking")
     answers: Mapped[list["ExamAnswer"]] = relationship(
         "ExamAnswer", back_populates="attempt", cascade="all, delete-orphan"
     )

@@ -2,9 +2,10 @@
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { createExam, listExams, updateExam } from '@/api/exams'
+import { getEligibility } from '@/api/bookings'
 import { listSubjects } from '@/api/questions'
 import { useAuthStore } from '@/stores/auth'
-import type { Exam, ExamStatus, ExamType, Subject } from '@/types'
+import type { Exam, ExamEligibility, ExamStatus, ExamType, Subject } from '@/types'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -13,6 +14,8 @@ const exams = ref<Exam[]>([])
 const subjects = ref<Subject[]>([])
 const currentStatus = ref<ExamStatus | ''>('published')
 const loading = ref(false)
+// 学生端：每场考试的开考资格（预约状态驱动）
+const eligibility = ref<Record<number, ExamEligibility>>({})
 
 const tabs: Array<{ label: string; value: ExamStatus | '' }> = [
   { label: '进行中', value: 'published' },
@@ -39,6 +42,15 @@ async function loadExams(status: ExamStatus | '') {
   try {
     const data = await listExams({ status: status || undefined, page: 1, page_size: 100 })
     exams.value = data.items
+    if (auth.role === 'student') {
+      eligibility.value = {}
+      const results = await Promise.all(
+        data.items.map((e) => getEligibility(e.id).catch(() => null)),
+      )
+      data.items.forEach((e, i) => {
+        if (results[i]) eligibility.value[e.id] = results[i] as ExamEligibility
+      })
+    }
   } finally {
     loading.value = false
   }
@@ -67,6 +79,8 @@ const form = reactive({
   pass_score: 60,
   exam_type: 'formal' as ExamType,
   anti_cheat_enabled: true,
+  require_booking: true,
+  max_attempts: 2,
 })
 
 function openModal() {
@@ -77,6 +91,8 @@ function openModal() {
   form.pass_score = 60
   form.exam_type = 'formal'
   form.anti_cheat_enabled = true
+  form.require_booking = true
+  form.max_attempts = 2
   modalError.value = ''
   modalVisible.value = true
 }
@@ -97,6 +113,8 @@ async function submitExam() {
       pass_score: form.pass_score,
       exam_type: form.exam_type,
       anti_cheat_enabled: form.anti_cheat_enabled ? 1 : 0,
+      require_booking: form.require_booking ? 1 : 0,
+      max_attempts: form.max_attempts,
     })
     modalVisible.value = false
     window.alert('考试已创建，请到题库添加题目后发布')
@@ -133,7 +151,7 @@ onMounted(async () => {
     <thead>
       <tr>
         <th>ID</th><th>考试名称</th><th>类型</th><th>时长</th>
-        <th>总分</th><th>及格分</th><th>状态</th><th>操作</th>
+        <th>总分</th><th>及格分</th><th>预约/次数</th><th>状态</th><th>操作</th>
       </tr>
     </thead>
     <tbody>
@@ -144,10 +162,31 @@ onMounted(async () => {
         <td>{{ e.duration_minutes }}分钟</td>
         <td>{{ e.total_score }}</td>
         <td>{{ e.pass_score }}</td>
+        <td>
+          {{ e.require_booking ? '需预约' : '免预约' }} · 最多{{ e.max_attempts }}次
+          <template v-if="auth.role === 'student' && eligibility[e.id]">
+            <br /><span class="muted">已考 {{ eligibility[e.id].used_attempts }} 次</span>
+          </template>
+        </td>
         <td><span class="badge" :class="`badge-${e.status}`">{{ statusText[e.status] || e.status }}</span></td>
         <td>
+          <template v-if="auth.role === 'student' && e.status === 'published'">
+            <RouterLink
+              v-if="eligibility[e.id]?.can_start"
+              class="btn btn-sm btn-primary"
+              :to="{ name: 'exam-take', params: { examId: e.id } }"
+            >开始考试</RouterLink>
+            <RouterLink
+              v-else-if="e.require_booking && !eligibility[e.id]?.has_passed"
+              class="btn btn-sm"
+              :to="{ name: 'bookings' }"
+            >去预约</RouterLink>
+            <span v-if="eligibility[e.id] && !eligibility[e.id].can_start" class="muted">
+              {{ eligibility[e.id].reason }}
+            </span>
+          </template>
           <RouterLink
-            v-if="e.status === 'published'"
+            v-else-if="e.status === 'published'"
             class="btn btn-sm btn-primary"
             :to="{ name: 'exam-take', params: { examId: e.id } }"
           >开始考试</RouterLink>
@@ -163,7 +202,7 @@ onMounted(async () => {
         </td>
       </tr>
       <tr v-if="!loading && !exams.length" class="empty-row">
-        <td colspan="8">暂无考试</td>
+        <td colspan="9">暂无考试</td>
       </tr>
     </tbody>
   </table>
@@ -206,6 +245,15 @@ onMounted(async () => {
           <input v-model="form.anti_cheat_enabled" type="checkbox" /> 开启防作弊（切屏检测）
         </label>
       </div>
+      <div class="form-group">
+        <label>
+          <input v-model="form.require_booking" type="checkbox" /> 需预约后才能开考
+        </label>
+      </div>
+      <div class="form-group">
+        <label>允许考试次数（1=仅首考，&gt;1 支持补考）</label>
+        <input v-model.number="form.max_attempts" type="number" min="1" />
+      </div>
       <div v-if="modalError" class="error-msg">{{ modalError }}</div>
       <div class="modal-actions">
         <button class="btn btn-primary" :disabled="saving" @click="submitExam">
@@ -216,3 +264,11 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.muted {
+  color: #999;
+  font-size: 12px;
+}
+</style>
+

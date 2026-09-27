@@ -35,6 +35,16 @@
 - 排名与百分位、排行榜
 - 通过考试自动生成证书
 
+### 考试预约与补考
+- **管理员**：配置考试时段（时间窗口 + 名额），可开放/关闭、调整名额
+- **学生**：选择时段提交首考/补考申请，可查看审核进度、取消预约
+- **教师**：审核预约申请（通过即占用名额，驳回可重新申请）
+- **预约状态驱动开考资格**：仅"已通过且在时段窗口内"才能开考，开考后预约置为已使用
+- **次数限制**：每门考试可配置最大次数（`max_attempts`，1=仅首考，>1 支持补考）；
+  时段结束未考自动判定**缺考**并消耗一次机会
+- **成绩联动**：统计含参考人数（去重）、到考率、缺考、首考/补考人次与补考通过率；
+  排名/排行榜按每人**最佳成绩**计算；补考通过**自动发证**（取最高成绩）
+
 ## 🧱 技术栈
 
 | 端 | 技术 |
@@ -66,7 +76,8 @@ npm --prefix frontend install
 
 ### 2. 初始化数据库（首次运行）
 
-含示例数据：4 用户、1 科目、6 知识点、23 题、1 场已发布考试。
+含示例数据：4 用户、1 科目、6 知识点、23 题、1 场已发布考试（需预约、允许 1 次补考），
+附 2 个考试时段与 2 条示例预约（student1 已审核通过、student2 待审核）。
 
 ```bash
 npm run init-db
@@ -131,7 +142,7 @@ exam_system/
 ├── app/                     # FastAPI 后端
 │   ├── main.py              # 入口（API 路由 + CORS + 生产环境 SPA 托管）
 │   ├── core/                # 配置 / 数据库 / 安全 / 依赖
-│   ├── models/              # SQLAlchemy 模型（10 张表）
+│   ├── models/              # SQLAlchemy 模型（12 张表）
 │   ├── schemas/             # Pydantic 校验
 │   ├── services/            # 业务逻辑（组卷 / 评分 / 统计 / 防作弊）
 │   ├── api/                 # REST 接口
@@ -162,5 +173,6 @@ exam_system/
 | 考试 | `GET/POST /api/exams`、`POST /api/exams/papers/smart-generate` |
 | 答题 | `POST /api/attempts/{exam_id}/start`、`POST /api/attempts/{attempt_id}/submit`、`POST /api/attempts/{attempt_id}/screen-switch` |
 | 统计 | `GET /api/grades/stats/{exam_id}`、`/api/grades/rank/{exam_id}`、`/api/grades/leaderboard/{exam_id}`、`/api/grades/certificates` |
+| 预约补考 | 时段：`POST/GET /api/exams/{id}/slots`、`PUT/DELETE /api/slots/{id}`（管理员）；申请：`POST /api/bookings`、`GET /api/bookings/my`、`POST /api/bookings/{id}/cancel`（学生）；审核：`GET /api/bookings`、`POST /api/bookings/{id}/review`（教师/管理员）；资格：`GET /api/exams/{id}/eligibility` |
 
 完整接口文档：启动后访问 `http://127.0.0.1:8000/docs`（Swagger UI）。

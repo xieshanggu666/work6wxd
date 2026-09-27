@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.database import Base, engine
 from app.models import *  # noqa: F401,F403 确保模型注册
 
-from app.api import auth, users, questions, exams, attempts, grades
+from app.api import auth, users, questions, exams, attempts, grades, bookings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
@@ -45,6 +45,7 @@ app.include_router(questions.router, prefix=settings.API_PREFIX)
 app.include_router(exams.router, prefix=settings.API_PREFIX)
 app.include_router(attempts.router, prefix=settings.API_PREFIX)
 app.include_router(grades.router, prefix=settings.API_PREFIX)
+app.include_router(bookings.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/api/health")

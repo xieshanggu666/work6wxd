@@ -19,6 +19,8 @@ class ExamCreate(BaseModel):
     is_option_random: int = 0
     allow_back: int = 1
     anti_cheat_enabled: int = 1
+    require_booking: int = 0
+    max_attempts: int = Field(default=1, ge=1)
 
 
 class ExamUpdate(BaseModel):
@@ -35,6 +37,8 @@ class ExamUpdate(BaseModel):
     is_option_random: int | None = None
     allow_back: int | None = None
     anti_cheat_enabled: int | None = None
+    require_booking: int | None = None
+    max_attempts: int | None = Field(default=None, ge=1)
     status: str | None = None
 
 
@@ -59,6 +63,8 @@ class ExamResponse(ORMModel):
     is_option_random: int
     allow_back: int
     anti_cheat_enabled: int
+    require_booking: int
+    max_attempts: int
     status: str
     created_at: datetime
 

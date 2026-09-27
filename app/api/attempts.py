@@ -67,9 +67,14 @@ def submit_exam(attempt_id: int, data: ExamSubmitRequest, db: Session = Depends(
 
     rank_info = None
     try:
-        rank_info = grade_service.get_user_rank(db, user.id, attempt.exam_id)
+        rank_info = grade_service.get_user_rank(
+            db, user.id, attempt.exam_id, attempt_id=attempt.id
+        )
     except ValueError:
         pass
+
+    # 预约/补考联动：通过则自动发放证书
+    grade_service.auto_issue_certificate(db, attempt)
 
     from app.schemas.attempt import ExamAnswerResponse
     return APIResponse(data=ExamResultResponse(

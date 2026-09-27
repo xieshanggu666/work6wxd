@@ -23,6 +23,8 @@ class Exam(Base):
     is_option_random: Mapped[int] = mapped_column(Integer, default=0)
     allow_back: Mapped[int] = mapped_column(Integer, default=1)
     anti_cheat_enabled: Mapped[int] = mapped_column(Integer, default=1)
+    require_booking: Mapped[int] = mapped_column(Integer, default=0)  # 是否必须预约才能开考
+    max_attempts: Mapped[int] = mapped_column(Integer, default=1)  # 允许考试次数（1=仅首考，>1 支持补考）
     status: Mapped[str] = mapped_column(String(20), default="draft")  # draft/published/ended
     created_by: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -32,6 +34,9 @@ class Exam(Base):
         "ExamQuestion", back_populates="exam", cascade="all, delete-orphan", order_by="ExamQuestion.order_index"
     )
     attempts = relationship("ExamAttempt", back_populates="exam")
+    slots: Mapped[list["ExamSlot"]] = relationship(
+        "ExamSlot", cascade="all, delete-orphan", order_by="ExamSlot.start_time"
+    )
 
 
 class ExamQuestion(Base):

@@ -112,6 +112,8 @@ export interface Exam {
   is_option_random: number
   allow_back: number
   anti_cheat_enabled: number
+  require_booking: number
+  max_attempts: number
   status: ExamStatus
   created_at: string
 }
@@ -131,6 +133,74 @@ export interface ExamCreatePayload {
   is_random_order?: number
   is_option_random?: number
   anti_cheat_enabled?: number
+  require_booking?: number
+  max_attempts?: number
+}
+
+export type SlotStatus = 'open' | 'closed'
+
+export interface ExamSlot {
+  id: number
+  exam_id: number
+  name: string
+  start_time: string
+  end_time: string
+  capacity: number
+  booked_count: number
+  remaining: number
+  status: SlotStatus
+  created_at: string
+}
+
+export type SlotPayload = {
+  name?: string
+  start_time: string
+  end_time: string
+  capacity: number
+  status?: SlotStatus
+}
+
+export type BookingStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+  | 'used'
+  | 'missed'
+
+export type BookingType = 'first' | 'retake'
+
+export interface ExamBooking {
+  id: number
+  exam_id: number
+  slot_id: number | null
+  user_id: number
+  username: string
+  real_name: string
+  attempt_no: number
+  booking_type: BookingType
+  status: BookingStatus
+  apply_reason: string
+  review_comment: string
+  reviewer_id: number | null
+  reviewed_at: string | null
+  created_at: string
+  slot_name: string
+  slot_start: string | null
+  slot_end: string | null
+  exam_title: string
+}
+
+export interface ExamEligibility {
+  exam_id: number
+  require_booking: boolean
+  can_start: boolean
+  reason: string
+  max_attempts: number
+  used_attempts: number
+  remaining_attempts: number
+  has_passed: boolean
+  booking: ExamBooking | null
 }
 
 export interface ExamQuestionBrief {
@@ -196,6 +266,16 @@ export interface ExamStats {
   min_score: number
   pass_rate: number
   distribution: Record<string, number>
+  student_count: number
+  pass_count: number
+  booked_count: number
+  attended_count: number
+  attendance_rate: number
+  absent_count: number
+  first_attempt_count: number
+  retake_attempt_count: number
+  retake_pass_count: number
+  retake_pass_rate: number
 }
 
 export interface LeaderboardItem {

@@ -31,6 +31,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '考试中心' },
       },
       {
+        path: 'bookings',
+        name: 'bookings',
+        component: () => import('@/views/BookingsView.vue'),
+        meta: { title: '考试预约与补考' },
+      },
+      {
         path: 'grades/:examId',
         name: 'grades',
         component: () => import('@/views/GradesView.vue'),
