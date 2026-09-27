@@ -151,6 +151,11 @@ onMounted(async () => {
             class="btn btn-sm btn-primary"
             :to="{ name: 'exam-take', params: { examId: e.id } }"
           >开始考试</RouterLink>
+          <RouterLink
+            v-if="e.status === 'published' && auth.role === 'student'"
+            class="btn btn-sm"
+            :to="{ name: 'appointments' }"
+          >去预约</RouterLink>
           <button v-if="e.status === 'draft' && auth.canEdit" class="btn btn-sm" @click="publishExam(e.id)">
             发布
           </button>

@@ -1,5 +1,6 @@
 """初始化数据库并写入示例数据。用法: python scripts/init_db.py"""
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -8,10 +9,11 @@ from app.core.database import Base, engine, SessionLocal
 from app.models import (
     User, Subject, KnowledgePoint, Tag,
 )
-from app.services import user_service, question_service, exam_service
+from app.services import user_service, question_service, exam_service, appointment_service
 from app.schemas.user import UserCreate
 from app.schemas.question import SubjectCreate, KnowledgePointCreate, QuestionCreate, QuestionOptionCreate
 from app.schemas.exam import ExamCreate
+from app.schemas.appointment import SessionCreate, AppointmentCreate
 
 
 def main():
@@ -242,6 +244,21 @@ def main():
     db.commit()
     db.refresh(exam)
     print(f"  考试 #{exam.id} 已发布，包含 {len(exam.questions)} 题")
+
+    # 5. 考试场次与预约（管理员配置名额和时段，学生申请，教师审核）
+    print("创建考试场次与预约...")
+    session = appointment_service.create_session(db, SessionCreate(
+        exam_id=exam.id,
+        name="第一场次（全天）",
+        start_time=datetime.now() - timedelta(days=1),
+        end_time=datetime.now() + timedelta(days=30),
+        quota=50,
+        max_attempts=2,  # 正考 1 次 + 补考 1 次
+    ), admin.id)
+    appt = appointment_service.apply_appointment(db, s1, AppointmentCreate(
+        session_id=session.id, appointment_type="regular"))
+    appointment_service.review_appointment(db, appt, teacher, approve=True, comment="同意")
+    print(f"  场次 #{session.id} 名额 {session.quota}，student1 正考预约已审核通过")
 
     print("\n✅ 初始化完成！")
     print("   管理员: admin / 123456")

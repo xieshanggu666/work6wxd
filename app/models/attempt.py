@@ -21,10 +21,14 @@ class ExamAttempt(Base):
     user_agent: Mapped[str] = mapped_column(String(255), default="")
     cheat_warning_count: Mapped[int] = mapped_column(Integer, default=0)
     screen_switch_count: Mapped[int] = mapped_column(Integer, default=0)
+    appointment_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("exam_appointments.id"), nullable=True
+    )  # 经预约开考时关联预约记录（正考/补考）
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     exam: Mapped["Exam"] = relationship("Exam", back_populates="attempts")
     user: Mapped["User"] = relationship("User", back_populates="attempts")
+    appointment = relationship("ExamAppointment")
     answers: Mapped[list["ExamAnswer"]] = relationship(
         "ExamAnswer", back_populates="attempt", cascade="all, delete-orphan"
     )

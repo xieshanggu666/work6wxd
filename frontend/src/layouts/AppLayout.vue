@@ -23,6 +23,7 @@ function handleLogout() {
       <RouterLink :to="{ name: 'dashboard' }">仪表盘</RouterLink>
       <RouterLink :to="{ name: 'questions' }">题库管理</RouterLink>
       <RouterLink :to="{ name: 'exams' }">考试中心</RouterLink>
+      <RouterLink :to="{ name: 'appointments' }">考试预约</RouterLink>
       <RouterLink :to="{ name: 'certificates' }">我的证书</RouterLink>
       <button type="button" @click="handleLogout">退出登录</button>
       <span v-if="auth.user" class="nav-user">

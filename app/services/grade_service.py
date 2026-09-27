@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Exam, ExamAttempt, ExamAnswer, Question, GradeRecord, QuestionStatistics, Certificate,
+    Exam, ExamAttempt, ExamAnswer, ExamSession, Question, GradeRecord, QuestionStatistics, Certificate,
 )
 
 
@@ -106,49 +106,56 @@ def calculate_question_stats(db: Session, question_id: int) -> QuestionStatistic
     return stats
 
 
+def _best_attempts_by_user(db: Session, exam_id: int) -> dict[int, ExamAttempt]:
+    """按用户取已交卷的最高分记录（补考取最好成绩参与排名）"""
+    graded = (
+        db.query(ExamAttempt)
+        .filter(ExamAttempt.exam_id == exam_id, ExamAttempt.status == "graded")
+        .all()
+    )
+    best: dict[int, ExamAttempt] = {}
+    for a in graded:
+        if a.user_id not in best or a.score > best[a.user_id].score:
+            best[a.user_id] = a
+    return best
+
+
 def get_user_rank(db: Session, user_id: int, exam_id: int) -> dict:
     """
     获取用户在某次考试中的名次与百分位。
-    名次规则：分数高于该用户的已交卷人数 + 1（同分同名次）。
+    名次规则：分数高于该用户的人数 + 1（同分同名次）；
+    存在补考时按每人最高分参与排名。
     """
-    user_attempt = (
-        db.query(ExamAttempt)
-        .filter(
-            ExamAttempt.exam_id == exam_id,
-            ExamAttempt.user_id == user_id,
-            ExamAttempt.status == "graded",
-        )
-        .first()
-    )
+    best = _best_attempts_by_user(db, exam_id)
+    user_attempt = best.get(user_id)
     if not user_attempt:
         raise ValueError("尚未完成该考试")
 
-    higher = (
-        db.query(func.count(ExamAttempt.id))
-        .filter(
-            ExamAttempt.exam_id == exam_id,
-            ExamAttempt.score > user_attempt.score,
-        )
-        .scalar()
-    )
-    total = (
-        db.query(func.count(ExamAttempt.id))
-        .filter(ExamAttempt.exam_id == exam_id)
-        .scalar()
-    )
+    higher = sum(1 for uid, a in best.items() if a.score > user_attempt.score)
+    total = len(best)
 
     rank = higher + 1
     percentile = round(100 * (1 - higher / total), 1) if total else 0.0
 
-    record = GradeRecord(
-        attempt_id=user_attempt.id,
-        user_id=user_id,
-        exam_id=exam_id,
-        score=user_attempt.score,
-        rank=rank,
-        percentile=percentile,
+    record = (
+        db.query(GradeRecord)
+        .filter(GradeRecord.attempt_id == user_attempt.id)
+        .first()
     )
-    db.add(record)
+    if record:
+        record.score = user_attempt.score
+        record.rank = rank
+        record.percentile = percentile
+    else:
+        record = GradeRecord(
+            attempt_id=user_attempt.id,
+            user_id=user_id,
+            exam_id=exam_id,
+            score=user_attempt.score,
+            rank=rank,
+            percentile=percentile,
+        )
+        db.add(record)
     db.commit()
     return {"user_id": user_id, "exam_id": exam_id, "score": user_attempt.score,
             "rank": rank, "total": total, "percentile": percentile}
@@ -159,13 +166,22 @@ def get_leaderboard(db: Session, exam_id: int, limit: int = 20) -> list[dict]:
         db.query(ExamAttempt)
         .filter(ExamAttempt.exam_id == exam_id, ExamAttempt.status == "graded")
         .order_by(ExamAttempt.score.desc(), ExamAttempt.submit_time.asc())
-        .limit(limit)
         .all()
     )
+    # 同一用户多次考试（补考）只取最高分上榜
+    seen: set[int] = set()
+    unique: list[ExamAttempt] = []
+    for a in attempts:
+        if a.user_id in seen:
+            continue
+        seen.add(a.user_id)
+        unique.append(a)
+        if len(unique) >= limit:
+            break
     result = []
     prev_score = None
     prev_rank = 0
-    for i, a in enumerate(attempts, start=1):
+    for i, a in enumerate(unique, start=1):
         if a.score != prev_score:
             rank = i
             prev_rank = i
@@ -184,18 +200,27 @@ def get_leaderboard(db: Session, exam_id: int, limit: int = 20) -> list[dict]:
 
 
 def generate_certificate(db: Session, user_id: int, exam_id: int) -> Certificate:
-    """通过考试后生成证书，编号唯一"""
+    """通过考试后生成证书，编号唯一；补考通过按最高及格成绩发证"""
     attempt = (
         db.query(ExamAttempt)
         .filter(
             ExamAttempt.exam_id == exam_id,
             ExamAttempt.user_id == user_id,
             ExamAttempt.status == "graded",
+            ExamAttempt.is_passed == 1,
         )
+        .order_by(ExamAttempt.score.desc())
         .first()
     )
-    if not attempt or attempt.is_passed != 1:
+    if not attempt:
         raise ValueError("未通过考试，无法生成证书")
+
+    # 预约状态驱动证书发放：配置了场次的考试，成绩必须来自预约参考
+    has_sessions = (
+        db.query(ExamSession).filter(ExamSession.exam_id == exam_id).count() > 0
+    )
+    if has_sessions and not attempt.appointment_id:
+        raise ValueError("该考试需预约审核通过后参加，未预约的成绩无法生成证书")
 
     existing = (
         db.query(Certificate)

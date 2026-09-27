@@ -29,10 +29,20 @@
 - 简答：关键词命中率给分
 - 编程：标记待人工评测
 
+### 考试预约与补考
+- 管理员配置 **考试场次**（时段、名额、每人限考次数）
+- 学生申请 **正考 / 补考** 预约（补考需未通过且未超次数，必填理由）
+- 教师 **审核** 预约（通过时二次校验名额）
+- 预约状态驱动：
+  - **开考资格**：配置了场次的考试必须持“已通过”预约且在场次时段内
+  - **次数限制**：正考 + 补考总次数不超过场次限考次数
+  - **成绩统计**：正考 / 补考及格率、场次名额占用统计
+  - **证书发放**：需预约的考试仅认可经预约参考的及格成绩
+
 ### 成绩统计
 - 考试整体统计（平均分、及格率、分数分布）
 - 单题统计（正确率、实际难度、区分度）
-- 排名与百分位、排行榜
+- 排名与百分位、排行榜（补考取每人最高分）
 - 通过考试自动生成证书
 
 ## 🧱 技术栈
@@ -66,7 +76,7 @@ npm --prefix frontend install
 
 ### 2. 初始化数据库（首次运行）
 
-含示例数据：4 用户、1 科目、6 知识点、23 题、1 场已发布考试。
+含示例数据：4 用户、1 科目、6 知识点、23 题、1 场已发布考试、1 个考试场次（含 1 条已审核预约）。
 
 ```bash
 npm run init-db
@@ -131,7 +141,7 @@ exam_system/
 ├── app/                     # FastAPI 后端
 │   ├── main.py              # 入口（API 路由 + CORS + 生产环境 SPA 托管）
 │   ├── core/                # 配置 / 数据库 / 安全 / 依赖
-│   ├── models/              # SQLAlchemy 模型（10 张表）
+│   ├── models/              # SQLAlchemy 模型（12 张表）
 │   ├── schemas/             # Pydantic 校验
 │   ├── services/            # 业务逻辑（组卷 / 评分 / 统计 / 防作弊）
 │   ├── api/                 # REST 接口
@@ -142,7 +152,7 @@ exam_system/
 │   │   ├── stores/          # Pinia（登录态）
 │   │   ├── router/          # Vue Router（含登录守卫）
 │   │   ├── layouts/         # 带顶部导航的布局
-│   │   ├── views/           # 登录/仪表盘/题库/考试/答题/结果/统计/证书
+│   │   ├── views/           # 登录/仪表盘/题库/考试/预约/答题/结果/统计/证书
 │   │   ├── types/           # 全局 TS 类型
 │   │   └── styles/
 │   ├── vite.config.ts       # /api 代理到 127.0.0.1:8000
@@ -162,5 +172,7 @@ exam_system/
 | 考试 | `GET/POST /api/exams`、`POST /api/exams/papers/smart-generate` |
 | 答题 | `POST /api/attempts/{exam_id}/start`、`POST /api/attempts/{attempt_id}/submit`、`POST /api/attempts/{attempt_id}/screen-switch` |
 | 统计 | `GET /api/grades/stats/{exam_id}`、`/api/grades/rank/{exam_id}`、`/api/grades/leaderboard/{exam_id}`、`/api/grades/certificates` |
+| 预约 | `GET/POST /api/appointments`、`POST /api/appointments/{id}/review`、`POST /api/appointments/{id}/cancel`、`GET /api/appointments/my` |
+| 场次 | `GET/POST /api/appointments/sessions`、`PUT/DELETE /api/appointments/sessions/{id}`、`GET /api/appointments/stats/{exam_id}` |
 
 完整接口文档：启动后访问 `http://127.0.0.1:8000/docs`（Swagger UI）。

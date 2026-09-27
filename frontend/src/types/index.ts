@@ -206,3 +206,80 @@ export interface LeaderboardItem {
   rank: number
   submit_time: string | null
 }
+
+/* ---------- 考试预约与补考 ---------- */
+export type SessionStatus = 'open' | 'closed'
+
+export interface ExamSession {
+  id: number
+  exam_id: number
+  name: string
+  start_time: string
+  end_time: string
+  quota: number
+  max_attempts: number
+  status: SessionStatus
+  created_at: string
+}
+
+export interface ExamSessionWithBooked extends ExamSession {
+  exam_title: string
+  booked: number
+  remaining: number
+}
+
+export interface SessionCreatePayload {
+  exam_id: number
+  name: string
+  start_time: string
+  end_time: string
+  quota: number
+  max_attempts: number
+}
+
+export type AppointmentType = 'regular' | 'retake'
+export type AppointmentStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+
+export interface Appointment {
+  id: number
+  session_id: number
+  exam_id: number
+  user_id: number
+  appointment_type: AppointmentType
+  status: AppointmentStatus
+  reason: string
+  attempt_no: number
+  review_comment: string
+  created_at: string
+}
+
+export interface AppointmentDetail extends Appointment {
+  exam_title: string
+  session_name: string
+  session_start_time: string | null
+  session_end_time: string | null
+  username: string
+  real_name: string
+  review_at: string | null
+}
+
+export interface SessionStatItem {
+  session_id: number
+  name: string
+  quota: number
+  booked: number
+  remaining: number
+  completed: number
+}
+
+export interface ExamAppointmentStats {
+  exam_id: number
+  total_appointments: number
+  by_status: Record<string, number>
+  by_type: Record<string, number>
+  regular_attempts: number
+  regular_pass_rate: number
+  retake_attempts: number
+  retake_pass_rate: number
+  sessions: SessionStatItem[]
+}

@@ -11,10 +11,23 @@ from app.core.config import settings
 from app.core.database import Base, engine
 from app.models import *  # noqa: F401,F403 确保模型注册
 
-from app.api import auth, users, questions, exams, attempts, grades
+from app.api import auth, users, questions, exams, attempts, grades, appointments
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+
+
+def _run_lightweight_migrations():
+    """为已存在的 SQLite 数据库补充新增列（create_all 不会修改已有表）"""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if "exam_attempts" in inspector.get_table_names():
+        columns = {c["name"] for c in inspector.get_columns("exam_attempts")}
+        if "appointment_id" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE exam_attempts ADD COLUMN appointment_id INTEGER"
+                ))
 
 
 @asynccontextmanager
@@ -22,6 +35,7 @@ async def lifespan(app: FastAPI):
     data_dir = BASE_DIR / "data"
     os.makedirs(data_dir, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    _run_lightweight_migrations()
     yield
 
 
@@ -45,6 +59,7 @@ app.include_router(questions.router, prefix=settings.API_PREFIX)
 app.include_router(exams.router, prefix=settings.API_PREFIX)
 app.include_router(attempts.router, prefix=settings.API_PREFIX)
 app.include_router(grades.router, prefix=settings.API_PREFIX)
+app.include_router(appointments.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/api/health")

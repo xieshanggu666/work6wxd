@@ -22,3 +22,8 @@ from app.schemas.grade import (
     ExamStatsResponse, QuestionStatsResponse,
     RankResponse, LeaderboardItem, CertificateResponse,
 )
+from app.schemas.appointment import (
+    SessionCreate, SessionUpdate, SessionResponse, SessionWithBookedResponse,
+    AppointmentCreate, AppointmentReview, AppointmentResponse, AppointmentDetailResponse,
+    SessionStatItem, ExamAppointmentStatsResponse,
+)

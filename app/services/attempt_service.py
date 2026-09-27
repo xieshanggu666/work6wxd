@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (
-    Exam, ExamAttempt, ExamAnswer, ExamQuestion, Question, QuestionOption,
+    Exam, ExamAttempt, ExamAnswer, ExamQuestion, ExamAppointment, Question, QuestionOption,
 )
 from app.schemas.attempt import AnswerSubmit, ExamSubmitRequest
+from app.services import appointment_service
 
 
 def _collect_exam_questions(db: Session, exam: Exam):
@@ -35,19 +36,38 @@ def _collect_exam_questions(db: Session, exam: Exam):
 
 
 def start_exam(db: Session, exam: Exam, user_id: int, ip: str, user_agent: str) -> ExamAttempt:
-    existing = (
-        db.query(ExamAttempt)
-        .filter(ExamAttempt.exam_id == exam.id, ExamAttempt.user_id == user_id)
-        .first()
-    )
-    if existing:
-        raise ValueError("您已经参加过该考试，不能重复参加")
+    # 预约状态驱动开考资格：配置了场次的考试必须持“已通过”预约且在场次时段内
+    appointment = appointment_service.check_start_eligibility(db, exam, user_id)
+
+    if appointment is None:
+        # 未配置场次：沿用旧的单次限制
+        existing = (
+            db.query(ExamAttempt)
+            .filter(ExamAttempt.exam_id == exam.id, ExamAttempt.user_id == user_id)
+            .first()
+        )
+        if existing:
+            raise ValueError("您已经参加过该考试，不能重复参加")
+    else:
+        # 预约路径允许多次考试（正考+补考），但不允许同时存在未完成的记录
+        in_progress = (
+            db.query(ExamAttempt)
+            .filter(
+                ExamAttempt.exam_id == exam.id,
+                ExamAttempt.user_id == user_id,
+                ExamAttempt.status == "in_progress",
+            )
+            .first()
+        )
+        if in_progress:
+            raise ValueError("您有未完成的考试，不能重复开考")
 
     attempt = ExamAttempt(
         exam_id=exam.id,
         user_id=user_id,
         ip_address=ip,
         user_agent=user_agent[:255],
+        appointment_id=appointment.id if appointment else None,
     )
     db.add(attempt)
     db.commit()
@@ -90,6 +110,17 @@ def submit_exam(db: Session, attempt: ExamAttempt, data: ExamSubmitRequest) -> E
     attempt.submit_time = datetime.now()
     attempt.status = "graded"
     attempt.is_passed = 1 if attempt.score >= exam.pass_score else 0
+
+    # 交卷后驱动预约状态：已通过 -> 已完成（释放给成绩统计与证书发放）
+    if attempt.appointment_id:
+        appointment = (
+            db.query(ExamAppointment)
+            .filter(ExamAppointment.id == attempt.appointment_id)
+            .first()
+        )
+        if appointment and appointment.status == "approved":
+            appointment.status = "completed"
+
     db.commit()
     db.refresh(attempt)
     return attempt
